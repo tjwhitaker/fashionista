@@ -1,0 +1,60 @@
+html, body {
+  font-family:sans-serif;
+  padding:0;
+  margin:0;
+  background:rgb(240, 240, 240);
+}
+.wrapper {
+  max-width:960px;
+  width:100%;
+  padding:10px;
+  margin:0 auto;
+  box-sizing:border-box;
+}
+
+header {
+  background:url(/static/nebula.jpg) no-repeat bottom;
+  background-size:cover;
+}
+header .wrapper {
+  display:flex;
+  justify-content:space-between;
+}
+
+.logo {
+  color:white;
+  text-transform:uppercase;
+  font-weight:bold;
+  text-decoration:none;
+  font-size:18px;
+  letter-spacing:1px;
+}
+nav a {
+  color:white;
+  font-size:12px;
+  font-weight:bold;
+  text-decoration:none;
+  padding:0 10px;
+  letter-spacing:1px;
+}
+
+canvas {
+  background:white;
+  width:100%;
+}
+
+p {
+  margin-top:0;
+}
+
+.button {
+  padding:10px;
+  color:white;
+  background:black;
+  font-size:12px;
+  font-weight:bold;
+  text-decoration:none;
+  text-transform:uppercase;
+  display:inline-block;
+  margin:10px 0;
+}
