@@ -38,7 +38,7 @@ nav a {
   letter-spacing:1px;
 }
 
-canvas {
+#frame {
   background:white;
   width:100%;
 }
