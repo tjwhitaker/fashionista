@@ -16,10 +16,6 @@ header {
   background:url(/static/nebula.jpg) no-repeat bottom;
   background-size:cover;
 }
-header .wrapper {
-  display:flex;
-  justify-content:space-between;
-}
 
 .logo {
   color:white;
@@ -27,14 +23,6 @@ header .wrapper {
   font-weight:bold;
   text-decoration:none;
   font-size:18px;
-  letter-spacing:1px;
-}
-nav a {
-  color:white;
-  font-size:12px;
-  font-weight:bold;
-  text-decoration:none;
-  padding:0 10px;
   letter-spacing:1px;
 }
 

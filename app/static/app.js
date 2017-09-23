@@ -6,7 +6,7 @@ var mouse = {x:0, y:0};
 canvas.width = parseInt(frame.getPropertyValue('width'));
 canvas.height = canvas.width / 2;
 
-ctx.lineWidth = 3;
+ctx.lineWidth = 5;
 ctx.lineJoin = 'round';
 ctx.lineCap = 'round';
 ctx.strokeStyle = '#000000';
