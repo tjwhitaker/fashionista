@@ -22,10 +22,17 @@
   <main>
     <div class="wrapper">
       <p>Draw a clothing item (shirt, pants, shoes etc.) and see if our machine learning model can detect it.</p>
+      
       <div id="frame">
+        <div id="overlay">
+          <div id="overlay-inner">
+          </div>
+        </div>
         <canvas id="paint"></canvas>
       </div>
-      <a class="button" href="#">Predict</a>
+
+      <canvas id="scaled"></canvas>
+      <a class="button" href="#" onclick="predict()">Predict</a>
     </div>
   </main>
 
