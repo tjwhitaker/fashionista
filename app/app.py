@@ -13,10 +13,12 @@ def serve(filename):
 def predict():
     json = request.json
     data = json['data']
-    model = joblib.load('models/rfc_model.pkl')
-    prediction = model.predict([data])
+    model = joblib.load('models/sgd_model.pkl')
+    label = model.predict([data]).tolist()
+    scores = model.decision_function(data).tolist()
 
-    return {'label': prediction.tolist()} 
+
+    return {'label': label, 'scores': scores}
 
 
 run(host='localhost', port=8080, reloader=True)

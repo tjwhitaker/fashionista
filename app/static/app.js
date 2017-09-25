@@ -1,9 +1,12 @@
 var frame = getComputedStyle(document.getElementById('frame'));
 var canvas = document.getElementById('paint');
 var scaledCanvas = document.getElementById('scaled');
+var predictionCanvas = document.getElementById('prediction-image');
 var boundingBox = document.getElementById('overlay');
 var ctx = canvas.getContext('2d');
 var scaledCtx = scaledCanvas.getContext('2d');
+var predictionCtx = predictionCanvas.getContext('2d');
+
 
 var mouse = {x:0, y:0};
 
@@ -12,6 +15,9 @@ canvas.height = canvas.width / 2;
 
 scaledCanvas.width = 280;
 scaledCanvas.height = 280;
+
+predictionCanvas.width = 28;
+predictionCanvas.height = 28;
 
 canvas.addEventListener('mousemove', function(e) {
   mouse.x = e.pageX - this.parentElement.offsetLeft;
@@ -30,12 +36,15 @@ canvas.addEventListener('mouseup', function() {
 }, false);
 
 var paint = function() {
-  ctx.fillRect(mouse.x - 5, mouse.y - 5, 10, 10);
+  ctx.fillRect(mouse.x - 10, mouse.y - 10, 20, 20);
 };
 
 var predict = function() {
   var data = getBoundedImageData();
   var scaledData = scaleImageData(data);
+
+  predictionCtx.clearRect(0, 0, 28, 28);  
+  predictionCtx.putImageData(scaledData, 0, 0);
   
   var preparedData = scaledData.data.filter(function(value, index) {
     return (index + 1) % 4 == 0;
@@ -63,7 +72,17 @@ var predict = function() {
       if (xhr.readyState == 4) {
           if(xhr.status == 200) {
               var obj = JSON.parse(xhr.responseText);
-              console.log(labelTargets[obj.label[0]]);
+              var label = document.getElementById('prediction-label');  
+              var scores = document.getElementById('prediction-scores');
+
+              label.innerHTML = labelTargets[obj.label[0]];
+              var scoreString = '';
+
+              obj.scores[0].forEach(function(value, index) {
+                scoreString = scoreString + labelTargets[index] + ": " + value + '<br>';    
+              });
+
+              scores.innerHTML = scoreString;
           }
       }
   };

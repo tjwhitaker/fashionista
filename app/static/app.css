@@ -120,3 +120,8 @@ p {
     margin-right: -40px;
     margin-top: -2px;
 }
+
+#prediction-label {
+  display:inline-block;
+  margin:10px 0 5px 0;
+}
