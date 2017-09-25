@@ -19,6 +19,11 @@ scaledCanvas.height = 280;
 predictionCanvas.width = 28;
 predictionCanvas.height = 28;
 
+ctx.lineWidth = 20;
+ctx.lineJoin = 'round';
+ctx.lineCap = 'round';
+ctx.strokeStyle = '#000000';
+
 canvas.addEventListener('mousemove', function(e) {
   mouse.x = e.pageX - this.parentElement.offsetLeft;
   mouse.y = e.pageY - this.parentElement.offsetTop;
@@ -36,7 +41,8 @@ canvas.addEventListener('mouseup', function() {
 }, false);
 
 var paint = function() {
-  ctx.fillRect(mouse.x - 10, mouse.y - 10, 20, 20);
+  ctx.lineTo(mouse.x, mouse.y);
+  ctx.stroke();
 };
 
 var predict = function() {

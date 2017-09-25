@@ -1,0 +1,188 @@
+---
+title: Fashionista Part 3 - Multiclassifiers
+tags: Classification, Multiclass, Tutorial
+---
+
+Now we're going to tackle our original problem by building a Multiclass Classifier. In our last post we build a binary classifier to decide whether an image was pants or not pants. A multiclass classifier will be able to decide whether an image is pants, shoes, a shirt etc.
+
+Some algorithms are capable of handling multiclass classification directly, like Random Forests or Bayes classifiers. Others are only capable of binary selection, like Support Vector Machines or Linear Classifiers. That doesn't mean binary classifiers are inherently less powerful. In fact, we can wire up multiple binary classifiers to act as one multiclass classifier.
+
+For example, we already have our pants classifier. If we build and train a binary classifier for every other piece of clothing we have, we can run a prediction through all of these binary classifiers and see which model outputs the highest decision score. This is called a one-versus-all strategy.
+
+You could tweak this strategy a little and build a more robust system by using a one-versus-one approach. Instead of training our binary classifiers to choose between pants and not pants, you could train it to choose between pants and shirts. Then you could train another to choose between pants or shoes. You would repeat this with every combination of feature classes you have. When it comes time to predict, you run that image through all of your classifiers and see which class wins the most duels. This method requires a lot more resources in terms of number of models, but one advantage is that you only need to train each model on a small subset of the training data.
+
+Some models scale poorly with the size of the training set (Support Vector Machines), so in these situations, one-versus-one is preferred since it is faster to train more models on smaller sets. For most other binary algorithms one-versus-all is preferred.
+
+Scikit learn automatically detects when you try to use a binary classifier for multiclass problems, and will select one-versus-all or one-versus-one depending on the algorithm. Converting our binary models to multiclass is as easy as:
+
+~~~ python
+sgd_model.fit(X_train, y_train)
+sgd_model.predict([some_row])
+~~~
+
+~~~
+array([1], dtype=uint8)
+~~~
+
+And 1 was our label for pants, so we can see that it predicted it correctly. We can try on another row and see what happens.
+
+~~~ python
+sgd_model.predict([X_train[42]])
+~~~
+
+~~~
+array([2], dtype=uint8)
+~~~
+
+2 was the target label for pullover. If we print out the image for that row...
+
+~~~ python
+new_image = X_train[42].reshape(28, 28)
+
+plt.imshow(new_image,
+           cmap=matplotlib.cm.binary,
+           interpolation='nearest')
+
+plt.axis('off')
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/pullover.png', class: 'half-image' %>
+
+And we see an image of a pullover! Again, our classifier was correct. We can train our Random Forest Classifier as easily as we did with the SGD model.
+
+~~~ python
+rfc_model.fit(X_train, y_train)
+frc_model.predict([X_train[42]])
+~~~
+
+~~~
+array([2], dtype=uint8)
+~~~
+
+And it predicted the pullover correctly as well. The next natural step would be to evaluate our new classifiers and see how they compare. We'll use f1_scores to compare, but we'll need to make a slight modification to what we did with our binary classifiers, and that is to add the parameter average='weighted'.
+
+~~~ python
+print(f1_score(y_train, sgd_predictions, average='weighted'))
+print(f1_score(y_train, rfc_predictions, average='weighted'))
+~~~
+
+~~~
+0.770575838775
+0.856265494596
+~~~
+
+And the random forest classifier wins! I bet we can improve those scores though. Remember in the wildfire project how we scaled our inputs? Let's see how that affects our models.
+
+~~~ python
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+
+X_scaled = scaler.fit_transform(X_train.astype(np.float64))
+sgd_scaled_predictions = cross_val_predict(sgd_model, X_scaled, y_train, cv=3)
+rfc_scaled_predictions = cross_val_predict(rfc_model, X_scaled, y_train, cv=3)
+~~~
+
+~~~ python
+print(f1_score(y_train, sgd_scaled_predictions, average='weighted'))
+print(f1_score(y_train, rfc_scaled_predictions, average='weighted'))
+~~~
+
+~~~
+0.831127409227
+0.856279051706
+~~~
+
+Our Stochaistic Gradient Descent Classifier improved a lot, while our Random Forest Classifier performed about the same. Just goes to show how different models can react to different inputs in different ways. Welcome to machine learning!
+
+### Error Analysis
+
+It would be tedious to look at every prediction and see what our models did. Can we visualize it in a way that's easy to digest? Well a good place to start is the confusion matrix.
+
+~~~ python
+sgd_confusion = confusion_matrix(y_train, sgd_scaled_predictions)
+rfc_confusion = confusion_matrix(y_train, rfc_scaled_predictions)
+~~~
+
+~~~ python
+plt.matshow(sgd_confusion, cmap=plt.cm.gray)
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/sgd_confusion.png', class: 'half-image' %>
+
+~~~ python
+plt.matshow(rfc_confusion, cmap=plt.cm.gray)
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/rfc_confusion.png', class: 'half-image' %>
+
+So we can see that the diagonals are very bright and represent correct classifications. There are some dark grey squares that represent misclassifications, but we can do some matrix manipulations to better see what's going on.
+
+~~~ python
+sgd_confusion_sums = sgd_confusion.sum(axis=1, keepdims=True)
+sgd_confusion_errors = sgd_confusion / sgd_confusion_sums
+
+np.fill_diagonal(sgd_confusion_errors, 0)
+plt.matshow(sgd_confusion_errors, cmap=plt.cm.gray)
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/sgd_confusion_errors.png', class: 'half-image' %>
+
+~~~ python
+rfc_confusion_sums = rfc_confusion.sum(axis=1, keepdims=True)
+rfc_confusion_errors = rfc_confusion / rfc_confusion_sums
+
+np.fill_diagonal(rfc_confusion_errors, 0)
+plt.matshow(rfc_confusion_errors, cmap=plt.cm.gray)
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/rfc_confusion_errors.png', class: 'half-image' %>
+
+We can see that our models are actually making pretty similar errors. The brightest row on both models is 6 by far with row 4, 2 and 0 following. If we refer back to our table...
+
+| Label | Description |
+| ----- | ----------- |
+| 0     | T-shirt/top |
+| 1     | Trouser     |
+| 2     | Pullover    |
+| 3     | Dress       |
+| 4     | Coat        |
+| 5     | Sandal      |
+| 6     | Shirt       |
+| 7     | Sneaker     |
+| 8     | Bag         |
+| 9     | Ankle boot  |
+
+We can see that the most common mistakes our models make is between shirts, t-shirts/tops, coats and pullovers. And that makes a lot of sense! I don't even know the difference between a shirt and a t-shirt/top. And you can imagine how similar a picture of a jacket and a pullover might be. Especially on low resolution 28x28 pixel images. We can take these insights and think of ways to help our classifier distinguish between these classes. Maybe we need more training data for these specific classes, or maybe we need to preprocess our images to make certain features stand out more. Or maybe we need to combine certain classes into one (like shirt and t-shirt).
+
+Now that we're coming to an end, let's go ahead and choose the RFC model and evaluate it on our test set.
+
+~~~ python
+final_predictions = cross_val_predict(rfc_model, X_test, y_test, cv=3)
+print(f1_score(y_test, final_predictions, average='weighted'))
+~~~
+
+~~~
+0.80987388681
+~~~
+
+And a final f1 score of ~80%. Not bad! Now let's save our models for future use. Create a models/ directory in the root of fashionista and run this.
+
+~~~ python
+from sklearn.externals import joblib
+
+joblib.dump(sgd_model, '../models/sgd_model.pkl')
+joblib.dump(rfc_model, '../models/rfc_model.pkl')
+~~~
+
+There it is! We built and trained a few multiclass classifiers and measured their performance. We took a look at what kind of errors they were making and brainstormed ideas on how to improve them. We evaluated our best performing model on our test set, and we saved our models for future use. For our next post, we'll build a system to make predictions on novel images. Thanks for reading!
+
+[Code Repository](https://github.com/new-baseline/fashionista) \\
+[Part 1: First Steps](/fashionista-part-1-first-steps.html) \\
+[Part 2: Simplify The Problem](/fashionista-part-2-simplify-the-problem.html) \\
+[Part 3: Multiclassifiers](/fashionista-part-3-multiclassifiers.html) \\
+[Part 4: The Web App](/fashionista-part-4-the-web-app.html)

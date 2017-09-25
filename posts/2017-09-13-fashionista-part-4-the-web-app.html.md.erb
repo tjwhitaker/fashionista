@@ -1,0 +1,481 @@
+---
+title: Fashionista Part 4 - The Web App
+tags: App, API, Classification, Tutorial
+---
+
+Today we're going to build an interactive app to interface with our classifier. The idea is to build a canvas tool in javascript that will allow users to draw a clothing item. We'll take that image and manipulate it to get it into a format that our ml algorithm can process. Then we'll make a prediction and return that data to the client.
+
+So let's create our new app. We're going to build this one with the bottle framework. You can isntall bottle with  First we'll create a new directory called app/. Inside that, we'll copy our models over and create a new file called app.py. Our hello world bottle app looks like this.
+
+~~~ python
+from bottle import route, run
+
+@route('/')
+def index():
+    return 'Hello world'
+
+run(host='localhost', port=8080, reloader=True)
+~~~
+
+Now if we run it with `python3 app.py` and navigate to localhost:8080, we should see hello world! We can upgrade it a little bit to serve a template at our index path. We'll create a new folder called templates/ and throw index.html inside of it. In index.html, you can put `hello world` to ensure it all works. Change app.py to use bottle's template function.
+
+~~~ python
+from bottle import route, run, template
+
+@route('/')
+def index():
+    return template('templates/index')
+
+run(host='localhost', port=8080, reloader=True)
+~~~
+
+Now bottle is loading up our template file. We'll go ahead and layout our template file.
+
+~~~ html
+<!doctype html>
+<head lang="en">
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="New Baseline">
+  <meta name="description" content="A machine learning app to classify clothing.">
+  <meta name="keywords" content="fashionista,ml,ai,classification,predictions">
+
+  <title>Fashionista | Classify Clothing</title>
+
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header>
+    <div class="wrapper">
+      <a class="logo" href="/"><img src="/static/logo.png"></a>
+      <nav>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrapper">
+      <p>Draw a clothing item (shirt, pants, shoes etc.) and see if our machine learning model can detect it.</p>
+      <div id="frame">
+        <canvas id="paint"></canvas>
+      </div>
+      <a class="button" href="#">Predict</a>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>  
+</body>
+~~~
+
+You'll notice that we're including a few static files in this page. We need to tell bottle to serve the files in our static/ folder.
+
+~~~ python
+@route('/static/<filename>')
+def serve(filename):
+    return static_file(filename, root='static/')
+~~~
+
+The js file is empty at this point, while the css and logo are something I've cooked up to make it look nice. You can see the contents of the css at <https://github.com/new-baseline/fashionista>. Here's a quick preview of what our app looks like.
+
+<%= image_tag 'fashionista/app_preview.png' %>
+
+So the real nitty gritty part of this app will be the drawing interface. At a high level, we're going to need to figure out a good way to translate a drawing into the 28x28 form that our model expects. My first idea is to do a pixel drawer that's just blown up so you can paint on a much larger canvas instead of a small 28x28 pixel box. We're also looking for a greyscale image, so my first thought is to have the brush have a low opacity. That way, people can get a greyscale image without needing to physically change the color everytime. You could just paint over spots to make them darker. Let's get started on playing around with canvas.
+
+Let's open app.js and get our canvas element. This is the hello world of canvas drawing. We'll initialize our canvas with a width and height. We'll set our context and initialize some stylistic things. We'll add some listeners to our canvas to detect mouse movements and clicks. And we'll cap it all off by stroking the path between mouse movements when we're in the mousedown event.
+
+~~~ javascript
+var frame = getComputedStyle(document.getElementById('frame'));
+var canvas = document.getElementById('paint');
+var ctx = canvas.getContext('2d');
+var mouse = {x:0, y:0};
+
+canvas.width = parseInt(frame.getPropertyValue('width'));
+canvas.height = canvas.width / 2;
+
+ctx.lineWidth = 3;
+ctx.lineJoin = 'round';
+ctx.lineCap = 'round';
+ctx.strokeStyle = '#000000';
+
+canvas.addEventListener('mousemove', function(e) {
+  mouse.x = e.pageX - this.offsetLeft;
+  mouse.y = e.pageY - this.offsetTop;
+}, false);
+
+canvas.addEventListener('mousedown', function(e) {
+  ctx.beginPath();
+  ctx.moveTo(mouse.x, mouse.y);
+
+  canvas.addEventListener('mousemove', paint, false);
+}, false);
+
+canvas.addEventListener('mouseup', function() {
+  canvas.removeEventListener('mousemove', paint, false);
+}, false);
+
+var paint = function() {
+  ctx.lineTo(mouse.x, mouse.y);
+  ctx.stroke();
+};
+~~~
+
+Now, we should now be able to draw in our canvas rectangle. Let's add a function now to get our image data.
+
+~~~ javascript
+var predict = function() {
+  var data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  console.log(data);
+};
+~~~
+
+And we'll run this when we click the predict button. So let's add an onclick parameter with the name of our new predict function.
+
+~~~ html
+<a class="button" href="#" onclick="predict()">Predict</a>
+~~~
+
+Now if we draw on our canvas and click the predict button, we'll see a console message with our image data. You'll see that our data consists of a massive array of values that lie between 0-255. This array is structured so that every pixel (starting in the top left corner) is represented by 4 values in the order RGBA. Since we have only black fully opaque pixels, our pixels will only have the values of (0, 0, 0, 255) (black) or (0, 0, 0, 0) (transparent). It seems like our canvas has a white background, but it's actually the parent div that has a white background. The canvas app itself is transparent until we draw on it.
+
+Let's make a bounding box so that it will be easier for us to resize and manipulate our image to be the right dimensions and size we want later. I found this beautiful looking overlay on [codrops](https://tympanus.net/codrops/2014/10/30/resizing-cropping-images-canvas/). We're just going to modify it a bit to make it 280px by 280px to make it easier to scale down to 28px by 28px;
+
+~~~ html
+<div id="frame">
+  <div id="overlay">
+    <div id="overlay-inner">
+    </div>
+  </div>
+  <canvas id="paint"></canvas>
+</div>
+~~~
+
+~~~ css
+#frame {
+  background:white;
+  width:100%;
+  position:relative;
+}
+
+#overlay {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin-left: -140px;
+    margin-top: -140px;
+    z-index: 999;
+    width: 280px;
+    height: 280px;
+    border: solid 2px rgba(222,60,80,.9);
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+#overlay:after,
+#overlay:before {
+    content: '';
+    position: absolute;
+    display: block;
+    width: 280px;
+    height: 40px;
+    border-left: dashed 2px rgba(222,60,80,.9);
+    border-right: dashed 2px rgba(222,60,80,.9);
+    box-sizing:border-box;
+}
+
+#overlay:before {
+    top: 0;
+    margin-left: -2px;
+    margin-top: -40px;
+}
+
+#overlay:after {
+    bottom: 0;
+    margin-left: -2px;
+    margin-bottom: -40px;
+}
+
+#overlay-inner:after,
+#overlay-inner:before {
+    content: '';
+    position: absolute;
+    display: block;
+    width: 40px;
+    height: 280px;
+    border-top: dashed 2px rgba(222,60,80,.9);
+    border-bottom: dashed 2px rgba(222,60,80,.9);
+    box-sizing:border-box;    
+}
+
+#overlay-inner:before {
+    left: 0;
+    margin-left: -40px;
+    margin-top: -2px;
+}
+
+#overlay-inner:after {
+    right: 0;
+    margin-right: -40px;
+    margin-top: -2px;
+}
+~~~
+
+Since we changed our wrapper div to have a postion relative, we need to make a small change to our javascript mouse tracking. We now need to calcuate the offset of our wrapper div, and not our actual canvas element. It's an easy fix, and just requires calling offsetLeft and offsetTop on the parent element of our canvas.
+
+~~~ javascript
+canvas.addEventListener('mousemove', function(e) {
+  mouse.x = e.pageX - this.parentElement.offsetLeft;
+  mouse.y = e.pageY - this.parentElement.offsetTop;
+}, false);
+~~~
+
+Now we can modify our predict function to get the image data for this bounded rectangle.
+
+~~~ javascript
+
+var boundingBox = document.getElementById('overlay');
+
+var predict = function() {
+  var data = getBoundedImageData();
+  console.log(data);
+};
+
+var getBoundedImageData = function() {
+  return ctx.getImageData(boundingBox.offsetLeft, 
+                          boundingBox.offsetTop,
+                          boundingBox.offsetWidth,
+                          boundingBox.offsetHeight);
+};
+~~~
+
+Now we need to think about scaling our image. We set it up so that our box is 280 x 280 and our goal is 28 x 28. Thus we can scale our image by a factor of 0.1. To do this, we need to create a new canvas that we'll use as a placeholder. We'll copy our image to it, clear our original canvas, scale it by a factor of 0.1, draw the scaled image, get the scaled image data, and clear our canvas and rescale it to be left with a clean slate.
+
+~~~ html
+<div id="frame">
+  <div id="overlay">
+    <div id="overlay-inner">
+    </div>
+  </div>
+  <canvas id="paint"></canvas>
+</div>
+
+<canvas id="scaled"></canvas>
+~~~
+
+~~~ css
+#scaled {
+  display:none;
+}
+~~~
+
+~~~ javascript
+var scaledCanvas = document.getElementById('scaled');
+var scaledCtx = scaledCanvas.getContext('2d');
+
+scaledCanvas.width = 280;
+scaledCanvas.height = 280;
+
+var predict = function() {
+  var data = getBoundedImageData();
+  var scaledData = scaleImageData(data);
+  console.log(scaledData);
+};
+
+var scaleImageData = function(data) {
+  scaledCtx.putImageData(data, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(0.1, 0.1);
+  ctx.drawImage(scaledCanvas, 0, 0);
+  imageData = ctx.getImageData(0, 0, 28, 28);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(10, 10);
+  return imageData;
+};
+~~~
+
+Now lets switch gears and turn to our server side code. We need to create an endpoint that will load our model, take our data and return a prediction.
+
+~~~ python
+from bottle import post, request, route, run, static_file, template
+from sklearn.externals import joblib
+
+@post('/predict')
+def predict():
+    json = request.json
+    data = json['data']
+    model = joblib.load('models/sgd_model.pkl')
+    label = model.predict([data]).tolist()
+    scores = model.decision_function(data).tolist()
+
+
+    return {'label': label, 'scores': scores}
+~~~
+
+Now we need to call this from our js file. We will also need to make sure we fileter our image data, since we don't care about the RGB part of what the canvas gives us. Only the alpha value. We're also going to change the html values to show our prediction results and we're going to add another canvas element to display the thumbnail we're predicting on.
+
+~~~ html
+<!doctype html>
+<head lang="en">
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="New Baseline">
+  <meta name="description" content="A machine learning app to classify clothing.">
+  <meta name="keywords" content="fashionista,ml,ai,classification,predictions">
+
+  <title>Fashionista | Classify Clothing</title>
+
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header>
+    <div class="wrapper">
+      <a class="logo" href="/"><img src="/static/logo.png"></a>
+      <nav>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrapper">
+      <p>Draw a clothing item (shirt, pants, shoes etc.) and see if our machine learning model can detect it.</p>
+      
+      <div id="frame">
+        <div id="overlay">
+          <div id="overlay-inner">
+          </div>
+        </div>
+        <canvas id="paint"></canvas>
+      </div>
+
+      <canvas id="scaled"></canvas>
+      <a class="button" href="#" onclick="predict()">Predict</a>
+      <div class="predictions">
+        <h1 id="prediction-label"></h1>
+        <canvas id="prediction-image"></canvas>
+        <p id="prediction-scores">
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+~~~
+
+~~~ javascript
+var frame = getComputedStyle(document.getElementById('frame'));
+var canvas = document.getElementById('paint');
+var scaledCanvas = document.getElementById('scaled');
+var predictionCanvas = document.getElementById('prediction-image');
+var boundingBox = document.getElementById('overlay');
+var ctx = canvas.getContext('2d');
+var scaledCtx = scaledCanvas.getContext('2d');
+var predictionCtx = predictionCanvas.getContext('2d');
+
+
+var mouse = {x:0, y:0};
+
+canvas.width = parseInt(frame.getPropertyValue('width'));
+canvas.height = canvas.width / 2;
+
+scaledCanvas.width = 280;
+scaledCanvas.height = 280;
+
+predictionCanvas.width = 28;
+predictionCanvas.height = 28;
+
+canvas.addEventListener('mousemove', function(e) {
+  mouse.x = e.pageX - this.parentElement.offsetLeft;
+  mouse.y = e.pageY - this.parentElement.offsetTop;
+}, false);
+
+canvas.addEventListener('mousedown', function(e) {
+  ctx.beginPath();
+  ctx.moveTo(mouse.x, mouse.y);
+
+  canvas.addEventListener('mousemove', paint, false);
+}, false);
+
+canvas.addEventListener('mouseup', function() {
+  canvas.removeEventListener('mousemove', paint, false);
+}, false);
+
+var paint = function() {
+  ctx.fillRect(mouse.x - 10, mouse.y - 10, 20, 20);
+};
+
+var predict = function() {
+  var data = getBoundedImageData();
+  var scaledData = scaleImageData(data);
+
+  predictionCtx.clearRect(0, 0, 28, 28);  
+  predictionCtx.putImageData(scaledData, 0, 0);
+  
+  var preparedData = scaledData.data.filter(function(value, index) {
+    return (index + 1) % 4 == 0;
+  }); 
+
+  var jsonData = JSON.stringify({'data': Array.from(preparedData)});
+  var labelTargets = {
+    '0': 'T-shirt',
+    '1': 'Trouser',
+    '2': 'Pullover',
+    '3': 'Dress',
+    '4': 'Coat',
+    '5': 'Sandal',
+    '6': 'Shirt',
+    '7': 'Sneaker',
+    '8': 'Bag',
+    '9': 'Boots'
+  };
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/predict', true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  
+  xhr.onreadystatechange = function() {
+      if (xhr.readyState == 4) {
+          if(xhr.status == 200) {
+              var obj = JSON.parse(xhr.responseText);
+              var label = document.getElementById('prediction-label');  
+              var scores = document.getElementById('prediction-scores');
+
+              label.innerHTML = labelTargets[obj.label[0]];
+              var scoreString = '';
+
+              obj.scores[0].forEach(function(value, index) {
+                scoreString = scoreString + labelTargets[index] + ": " + value + '<br>';    
+              });
+
+              scores.innerHTML = scoreString;
+          }
+      }
+  };
+  xhr.send(jsonData);
+};
+
+var getBoundedImageData = function() {
+  return ctx.getImageData(boundingBox.offsetLeft, 
+                          boundingBox.offsetTop,
+                          boundingBox.offsetWidth,
+                          boundingBox.offsetHeight);
+};
+
+var scaleImageData = function(data) {
+  scaledCtx.putImageData(data, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(0.1, 0.1);
+  ctx.drawImage(scaledCanvas, 0, 0);
+  imageData = ctx.getImageData(0, 0, 28, 28);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(10, 10);
+  return imageData;
+};
+~~~
+
+And that's all the code for our fashion app! Now we can have fun playing with it and seeing if we can pick up any patterns! I find that it tends to prefer filled in shapes, and not only outlines. Some predictions can be really whack, but at the same time I'm not the best artist haha. Here's a preview shot of the final app!
+
+<%= image_tag 'fashionista/final_preview.gif' %>
+
+[Code Repository](https://github.com/new-baseline/fashionista) \\
+[Part 1: First Steps](/fashionista-part-1-first-steps.html) \\
+[Part 2: Simplify The Problem](/fashionista-part-2-simplify-the-problem.html) \\
+[Part 3: Multiclassifiers](/fashionista-part-3-multiclassifiers.html) \\
+[Part 4: The Web App](/fashionista-part-4-the-web-app.html)

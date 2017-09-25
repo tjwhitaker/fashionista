@@ -1,0 +1,126 @@
+---
+title: Fashionista Part 1 - First Steps
+tags: Classification, Overview, Tutorial
+---
+
+A common 'Hello World' project in machine learning is building a system to recognize handwritten digits. There's been tons of academic papers that showcase and use the [MNIST Data Set](http://yann.lecun.com/exdb/mnist/). Whenever a new classification system is created, the first benchmark tends to be performance on the MNIST.
+
+I recently saw a dataset on github called the [fashion mnist](https://github.com/zalandoresearch/fashion-mnist). It's a labeled dataset of a bunch of articles of clothing that are well photographed and can be used to benchmark classification systems. So that's what we're going to do for our second project!
+
+READMORE
+
+I've created a new repo and downloaded the data from github. You can find the repo for our project here <https://github.com/new-baseline/fashionista>. The data we're working with in this project is massive compared to our wildfire project. Our training set has 60,000 examples and our test set has 10,000 examples. All of these contain a 28x28 pixel grayscale image and a label that corresponds to this table:
+
+| Label | Description |
+| ----- | ----------- |
+| 0     | T-shirt/top |
+| 1     | Trouser     |
+| 2     | Pullover    |
+| 3     | Dress       |
+| 4     | Coat        |
+| 5     | Sandal      |
+| 6     | Shirt       |
+| 7     | Sneaker     |
+| 8     | Bag         |
+| 9     | Ankle boot  |
+
+The images are all well photographed and of the same orientation. This will make it easier for our system to perform well on the test set. Here's a sample of some of the data we're working with:
+
+<%= image_tag 'fashionista/fashion-mnist-preview.png' %>
+
+Our data is in a different format than it was in wildfire, so we'll need to modify our data extraction a bit. In the fashion mnist repo on github (https://github.com/zalandoresearch/fashion-mnist) he wrote out a function to do this for us in utils > mnist_reader.py. We're going to borrow that little utility to get us started. So let's start a new notebook in our fashionista project and paste this into our first box.
+
+~~~ python
+import gzip
+import os
+import numpy as np
+
+def load_mnist(path, kind='train'):
+    """Load MNIST data from `path`"""
+    labels_path = os.path.join(path,
+                               '%s-labels-idx1-ubyte.gz'
+                               % kind)
+    images_path = os.path.join(path,
+                               '%s-images-idx3-ubyte.gz'
+                               % kind)
+
+    with gzip.open(labels_path, 'rb') as lbpath:
+        labels = np.frombuffer(lbpath.read(), dtype=np.uint8,
+                               offset=8)
+
+    with gzip.open(images_path, 'rb') as imgpath:
+        images = np.frombuffer(imgpath.read(), dtype=np.uint8,
+                               offset=16).reshape(len(labels), 784)
+
+    return images, labels
+~~~
+
+~~~ python
+X_train, y_train = load_mnist('../data', kind='train')
+X_test, y_test = load_mnist('../data', kind='t10k')
+~~~
+
+Since our data is already split up into test and training sets, we won't need to do that ourselves like we did in our previous project. It's still very important not to look at or touch the test set until the end. Let's take a quick peek at our training data.
+
+~~~ python
+print(X_train, X_train.shape)
+~~~
+
+~~~
+[[0 0 0 ..., 0 0 0]
+ [0 0 0 ..., 0 0 0]
+ [0 0 0 ..., 0 0 0]
+ ..., 
+ [0 0 0 ..., 0 0 0]
+ [0 0 0 ..., 0 0 0]
+ [0 0 0 ..., 0 0 0]] 
+ 
+(60000, 784)
+~~~
+
+We have an array with 60,000 objects which each have 784 features. So what do these fields mean? Well each of our rows represents an image. Each of our images are 28 X 28 pixels. Each pixel is greyscale and the number represents the intensity from 0 (white) - 255 (black).
+
+We can take a quick peek at an image by using matplotlob and some pixel manipulation.
+
+~~~ python
+%matplotlib inline
+import matplotlib
+import matplotlib.pyplot as plt
+
+some_row = X_train[1000]
+some_image = some_row.reshape(28, 28)
+
+plt.imshow(some_image, 
+           cmap=matplotlib.cm.binary, 
+           interpolation='nearest')
+
+plt.axis('off')
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/pants.png', class: 'half-image' %>
+
+And we can see that these pants match up to our label if we refer back to the table at the top of this post:
+
+~~~ python
+y_train[1000]
+~~~
+
+~~~
+1
+~~~
+
+Before moving on, it's a good idea to shuffle our test set so that our cross validation folds have a nice mix of everything. We don't want each of our folds to be primarily one type of clothing as this can vastly skew our model.
+
+~~~ python
+shuffle = np.random.permutation(60000)
+X_train, y_train = X_train[shuffle], y_train[shuffle]
+~~~
+
+That's about it for our intro post! Next time, we'll get our feet wet by building a binary classifeier (hotdog/not hotdog).
+
+[Code Repository](https://github.com/new-baseline/fashionista) \\
+[Part 1: First Steps](/fashionista-part-1-first-steps.html) \\
+[Part 2: Simplify The Problem](/fashionista-part-2-simplify-the-problem.html) \\
+[Part 3: Multiclassifiers](/fashionista-part-3-multiclassifiers.html) \\
+[Part 4: The Web App](/fashionista-part-4-the-web-app.html)

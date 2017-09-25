@@ -1,0 +1,300 @@
+---
+title: Fashionista Part 2 - Simplify The Problem
+tags: Classification, Simplification, Tutorial
+---
+
+Our goal with the fashionista project is to build a classifier that can tell what type of clothing a given picture is. This kinda sounds like a big jump to go to from nothing, so let's simplify our goal a little bit to get started. Let's build a classifier that can tell us whether an article of clothing is pants or not pants. This type of classifier is called a binary classifier and this was the model behind the famous silicon valley app, Seefood...
+
+READMORE
+
+<div class="video-wrapper"><iframe width="560" height="315" src="https://www.youtube.com/embed/ACmydtFDTGs?rel=0" frameborder="0" allowfullscreen></iframe></div>
+
+Remember the Stochaistic Gradient Descent Regressor model we used from the wildfire project? Well, Stochaistic Gradient Descent can also be used as a classifier, and it seems to be a good place to start. You can browse all of sklearn's supervised learning models here <http://scikit-learn.org/stable/supervised_learning.html>. 
+
+Let's create our target vector.
+
+~~~ python
+y_train_pants = (y_train == 1)
+y_test_pants = (y_test == 1)
+~~~
+
+This code is creating new target vectors with the boolean value (true of false) of whether our object is pants or not. We're comparing against the value of 1, because according to our target table, 1 is equal to trousers.
+
+| Label | Description |
+| ----- | ----------- |
+| 0     | T-shirt/top |
+| 1     | Trouser     |
+| 2     | Pullover    |
+| 3     | Dress       |
+| 4     | Coat        |
+| 5     | Sandal      |
+| 6     | Shirt       |
+| 7     | Sneaker     |
+| 8     | Bag         |
+| 9     | Ankle boot  |
+
+Now we can build our classifier with just a couple lines of code.
+
+~~~ python
+from sklearn.linear_model import SGDClassifier
+
+sgd_model = SGDClassifier(random_state=42)
+sgd_model.fit(X_train, y_train_pants)
+~~~
+
+The SGD classifier relies on randomness in its training. We add the random state parameter to give us some consistency and reproducible results going forward.
+
+So if we use our model to predict the pair of pants we looked at earlier...
+
+~~~ python
+sgd_model.predict([some_row])
+~~~
+
+~~~ python
+array([ True], dtype=bool)
+~~~
+
+Excellent. It looks like the model predicted pants correctly. How does it perform on the whole dataset? It turns out that measuring performance on a classifier is a bit more tricky than a regressor, so let's dive in.
+
+Measuring Performance
+---------------------
+
+A good method to use on classifiers is cross validation, just like we used with our wildfire project. If you don't remember or didn't read about cross validation, it creates a number of 'folds' on our dataset and for each fold, trains a model on the remaining folds. It then evaluates that model on the fold. This will give us k different models, each evaluated on a slightly different part of our whole training set.
+
+Here's how to implement cross validation for our classifier.
+
+~~~ python
+from sklearn.model_selection import cross_val_score
+
+cross_val_score(sgd_model, 
+                X_train, 
+                y_train_pants, 
+                cv=5, 
+                scoring='accuracy')
+~~~
+
+~~~ python
+array([ 0.99033333,  0.98916667,  0.98733333,  0.99175   ,  0.98066667])
+~~~
+
+Wow, that is insane accuracy for our first try! Over 98% on every fold is really good. Unfortunately, this is a little too good to be true and this demonstrates why performance measures on classifiers are more tricky. So let's think about our data and try to understand what's going on.
+
+So our dataset consists of 10 different articles of clothing. So only 10% (roughly) of our dataset will be pants. Let's assume we build a terrible classifier that only spits out false for every prediction regardless of the input. That terrible classifier, when evaluated on our dataset, will give an accuracy score of at least 90%. Accuracy can be very misleading in classification models and very dependent on the ratios of items in training and test sets. We have other options to measure performance though.
+
+### Confusion Matrix
+
+For classifiers, a confusion matrix is often a better way to look at performance. The general idea is to count the number of times our model classifies something as class A instead of the actual class of B. So we'll build a matrix of all of our classes, and say we want to see the number of times our model confused pants (target label of 1) with t-shirts (target label value of 0) we would look at the value in our matrix at row 1 and column 0.
+
+Before building the confusion matrix, we need to get all of our models predictions. The cross_val_predict() function works just like the cross_val_score() function in that it performs k-fold validation across our dataset. Instead of returning a score however, it returns our predictions.
+
+~~~ python
+from sklearn.model_selection import cross_val_predict
+
+y_train_predictions = cross_val_predict(sgd_model, 
+                                        X_train, 
+                                        y_train_pants, 
+                                        cv=5)
+~~~
+
+Then we can build our confusion matrix by using the confusion_matrix() function and our predicted and target values.
+
+~~~ python
+from sklearn.metrics import confusion_matrix
+
+confusion_matrix(y_train_pants, y_train_predictions)
+~~~
+
+~~~
+array([[53679,   321],
+       [  270,  5730]])
+~~~
+
+So, each row in the matrix represents the actual class, while each column represents the predictions. So the number of times our model confused not pants with pants was 532 times (false positives). The number of times our model confused pants with not pants was 197 times (false negatives). In order to get a perfect score, our model would need to have 0s on the diagonal.
+
+### Precision and Recall
+
+We can get more concise metrics to more easily compare. Two of these metrics include Precision and Recall. Precision is the measure of hits versus false alarms (e.g. calling a shirt a pair of pants). Recall is the measure of hits versus misses (e.g. calling a pair of pants a shirt).
+
+$$
+precision = {\frac {True \ Positives} {True \ Positives + False \ Positives}}
+$$
+
+$$
+recall = {\frac {True \ Positives} {True \ Positives + False \ Negatives}}
+$$
+
+Sklearn implements these for us with the handy precision_score() and recall_score() functions.
+
+~~~ python
+from sklearn.metrics import precision_score, recall_score
+
+print(precision_score(y_train_pants, y_train_predictions))
+print(recall_score(y_train_pants, y_train_predictions))
+~~~
+
+~~~
+0.946950917204
+0.955
+~~~
+
+So our classifier actually has a pretty good precision and recall score!. This means that when our classifier claims an image is pants, it's right about 94% of the time. When pants are given to our model, it correctly identifies them 95% of the time.
+
+There's a way to combine these metrics in a way that's easier to compare against multiple models. The F₁ score is the harmonic mean of precision and recall. A regular mean treats all values equally, while the harmonic mean gives more weight to low values. The only way to get a high F₁ score is if both precision and recall are high.
+
+$$
+F_{1} = {\frac {2} {{\frac {1} {precision}} + {\frac {1} {recall}}}}
+$$
+
+We can compute this in sklearn:
+
+~~~ python
+from sklearn.metrics import f1_score
+
+f1_score(y_train_pants, y_train_predictions)
+~~~
+
+~~~
+0.95095842668658204
+~~~
+
+The f1 score favors classifiers that have similar precision and recall. Sometimes you may build a model where you want to prioritize precision over recall. Let's say we're building a system to detect if music lyrics are safe for kids. We're okay with rejecting a few good songs if it means greater precision in keeping safe ones. A system that may favor recall over precision could be a casino cheating system. We'd be okay with a few false alarms if it means that we catch 99% of the cheating that goes on.
+
+Unfortunately, there's no such thing as a perfect system. By increasing precision, you decrease recall and vice versa.
+
+We can influence our models precision/recall by calling the decision_function() instead of predict(). This will allow us to set a threshold value and base our predictions off that.
+
+~~~ python
+y_scores = cross_val_predict(sgd_model,
+                             X_train,
+                             y_train_pants,
+                             cv=5,
+                             method='decision_function')
+~~~
+
+Now with these scores, we can compute precision and recall for all possible thresholds using the precision_recall_curve() function.
+
+~~~ python
+from sklearn.metrics import precision_recall_curve
+
+precisions, recalls, thresholds = precision_recall_curve(y_train_pants,
+                                                         y_scores)
+~~~
+
+~~~ python
+def plot_precision_recall(precisions, recalls, thresholds):
+    plt.plot(thresholds, precisions[:-1], 'b--', label='Precision')
+    plt.plot(thresholds, recalls[:-1], 'g-', label='Recall')
+    plt.xlabel('Threshold')
+    plt.legend(loc='upper left')
+    plt.ylim([0, 1])
+    
+plot_precision_recall(precisions, recalls, thresholds)
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/precision_recall_graph.png', class: 'half-graph' %>
+
+Now we can choose a threshold that will best match up to our task, which appears to be slightly more than 0. We can try a few different thresholds and see how they affect our model.
+
+~~~ python
+y_train_predictions_new = (y_scores > 10000)
+
+print(precision_score(y_train_pants, y_train_predictions_new))
+print(recall_score(y_train_pants, y_train_predictions_new))
+~~~
+
+~~~
+0.952222407192
+0.953333333333
+~~~
+
+With a threshold of 10,000 we're just about even on our precision and recall. If we want to skew our model into either direction, it's as easy as changing 10,000 to a higher or lower threshold value!
+
+### Receiver Operating Characteristic
+
+Another metric commonly used with binary classifiers is the ROC curve. It's similar to the precision/recall curve, but it plots the true positive rate against the false positive rate. To plot the ROC curve, we need to calculate the true positive rate and false positive rate for various thresholds.
+
+~~~ python
+from sklearn.metrics import roc_curve
+
+fpr, tpr, thresholds = roc_curve(y_train_pants, y_scores)
+~~~
+
+~~~ python
+def plot_roc_curve(fpr, tpr, label=None):
+    plt.plot(fpr, tpr, label=label)
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.axis([0, 1, 0, 1])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+
+plot_roc_curve(fpr, tpr)
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/roc_curve.png', class: 'half-graph' %>
+
+The dotted line represents a truly random classifier. We want our graph to be as close to the top left corner as possible. You can compare models using the roc_curve by calculating the area under the curve. A value of 1 is a perfect classifier.
+
+~~~ python
+from sklearn.metrics import roc_auc_score
+
+roc_auc_score(y_train_pants, y_scores)
+~~~
+
+~~~
+0.99492766358024698
+~~~
+
+Let's train another classifier and see how it compares. We'll train the Random Forest Classifier. This works similarly to the Random Forest Regressor, in that it is an ensemble model that trains a bunch of decision trees and evaluates them and chooses the best one. One caveat is that RFC models don't have a decision_function(). Instead, they use predict_proba(). This returns an array containing probabilities that a given instance belongs to a class. Sklearn classifiers typically have one or the other of these functions.
+
+~~~ python
+from sklearn.ensemble import RandomForestClassifier
+
+rfc_model = RandomForestClassifier(random_state=42)
+y_probas_forest = cross_val_predict(rfc_model,
+                                    X_train,
+                                    y_train_pants,
+                                    cv=5,
+                                    method='predict_proba')
+
+rfc_scores = y_probas_forest[:, -1]
+fpr_rfc, tpr_rfc, thresholds_rfc = roc_curve(y_train_pants, rfc_scores)
+~~~
+
+~~~ python
+plt.plot(fpr, tpr, 'b:', label='SGD')
+plot_roc_curve(fpr_rfc, tpr_rfc, 'RFC')
+plt.legend(loc='lower right')
+plt.show()
+~~~
+
+<%= image_tag 'fashionista/roc_comparison.png', class: 'half-graph' %>
+
+~~~ python
+roc_auc_score(y_train_pants, rfc_scores)
+~~~
+
+~~~
+0.99669205864197541
+~~~
+
+There we have it! We can see that our Random Forest Model performed slightly better than our SGD model. We have successfully trained a couple of binary classifiers and measured their performance with a few different metrics and compared them against each other. Next time, we'll start working on our multiclass classifier.
+
+~~~ python
+print(f1_score(y_train, sgd_predictions, average='weighted'))
+print(f1_score(y_train, rfc_predictions, average='weighted'))
+~~~
+
+~~~
+0.770575838775
+0.856265494596
+~~~
+
+And the random forest classifier wins!
+
+[Code Repository](https://github.com/new-baseline/fashionista) \\
+[Part 1: First Steps](/fashionista-part-1-first-steps.html) \\
+[Part 2: Simplify The Problem](/fashionista-part-2-simplify-the-problem.html) \\
+[Part 3: Multiclassifiers](/fashionista-part-3-multiclassifiers.html) \\
+[Part 4: The Web App](/fashionista-part-4-the-web-app.html)
