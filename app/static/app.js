@@ -30,13 +30,44 @@ canvas.addEventListener('mouseup', function() {
 }, false);
 
 var paint = function() {
-  ctx.fillRect(mouse.x - 10, mouse.y - 10, 20, 20);
+  ctx.fillRect(mouse.x - 5, mouse.y - 5, 10, 10);
 };
 
 var predict = function() {
   var data = getBoundedImageData();
   var scaledData = scaleImageData(data);
-  console.log(scaledData);
+  
+  var preparedData = scaledData.data.filter(function(value, index) {
+    return (index + 1) % 4 == 0;
+  }); 
+
+  var jsonData = JSON.stringify({'data': Array.from(preparedData)});
+  var labelTargets = {
+    '0': 'T-shirt',
+    '1': 'Trouser',
+    '2': 'Pullover',
+    '3': 'Dress',
+    '4': 'Coat',
+    '5': 'Sandal',
+    '6': 'Shirt',
+    '7': 'Sneaker',
+    '8': 'Bag',
+    '9': 'Boots'
+  };
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/predict', true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  
+  xhr.onreadystatechange = function() {
+      if (xhr.readyState == 4) {
+          if(xhr.status == 200) {
+              var obj = JSON.parse(xhr.responseText);
+              console.log(labelTargets[obj.label[0]]);
+          }
+      }
+  };
+  xhr.send(jsonData);
 };
 
 var getBoundedImageData = function() {
@@ -53,5 +84,6 @@ var scaleImageData = function(data) {
   ctx.drawImage(scaledCanvas, 0, 0);
   imageData = ctx.getImageData(0, 0, 28, 28);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(10, 10);
   return imageData;
 };
