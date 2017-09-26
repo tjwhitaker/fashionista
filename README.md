@@ -14,3 +14,5 @@ notebooks/ contains a jupyter notebook file that goes through the process.
 
 posts/ contains blog posts to walk you through this project.
 ```
+
+![Preview](images/preview.gif)
